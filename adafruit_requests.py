@@ -227,22 +227,28 @@ def request(method, url, data=None, json=None, headers=None, stream=False, timeo
         if data:
             sock.send(bytes(data, "utf-8"))
 
+        # b'HTTP/1.1 200 OK'
         if hasattr(sock, "available"):
             line = sock.readline()
         else:
-            #line = bytes()
             line = bytes()
             while True:
-                data = sock.recv(1024)
+                data = sock.recv(1)
                 line +=data
-                if not data: break
+                if not data or "\r\n" in line: break
+            print(line)
+            raise
 
-        print("Read: ", line)
+        print(line)
         line = line.split(None, 2)
+        print(line)
         status = int(line[1])
         reason = ""
         if len(line) > 2:
+            print("parsing reason...")
+            print("line: ,", line[2])
             reason = line[2].rstrip()
+        print("Status: {}\nReason: {}".format(status, reason))
         resp.headers = parse_headers(sock)
         if resp.headers.get("transfer-encoding"):
             if "chunked" in resp.headers.get("transfer-encoding"):
