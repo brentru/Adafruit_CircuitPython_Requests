@@ -111,7 +111,7 @@ class Response:
         # print("Content length:", content_length)
         if self._cached is None:
             try:
-                self._cached = self.socket.read(content_length)
+                self._cached = self.socket.recv(content_length)
             finally:
                 self.socket.close()
                 self.socket = None
@@ -139,7 +139,7 @@ class Response:
             raise NotImplementedError("Unicode not supported")
 
         while True:
-            chunk = self.socket.read(chunk_size)
+            chunk = self.socket.recv(chunk_size)
             if chunk:
                 yield chunk
             else:
@@ -182,7 +182,6 @@ def request(method, url, data=None, json=None, headers=None, stream=False, timeo
         addr_info = _the_sock.getaddrinfo(host, port, 0, _the_sock.SOCK_STREAM)[0]
     else:
         addr_info = _the_sock.getaddrinfo(host, port)[0]
-        print(addr_info)
 
     sock = _the_sock.socket(addr_info[0], addr_info[1], addr_info[2])
     resp = Response(sock)  # our response
@@ -227,28 +226,16 @@ def request(method, url, data=None, json=None, headers=None, stream=False, timeo
         if data:
             sock.send(bytes(data, "utf-8"))
 
-        # b'HTTP/1.1 200 OK'
-        if hasattr(sock, "available"):
+        if hasattr(sock, "avaliable"):
             line = sock.readline()
         else:
-            line = bytes()
-            while True:
-                data = sock.recv(1)
-                line +=data
-                if not data or "\r\n" in line: break
-            print(line)
-            raise
+            line = _the_interface.readline(sock)
 
-        print(line)
         line = line.split(None, 2)
-        print(line)
         status = int(line[1])
         reason = ""
         if len(line) > 2:
-            print("parsing reason...")
-            print("line: ,", line[2])
             reason = line[2].rstrip()
-        print("Status: {}\nReason: {}".format(status, reason))
         resp.headers = parse_headers(sock)
         if resp.headers.get("transfer-encoding"):
             if "chunked" in resp.headers.get("transfer-encoding"):
@@ -273,7 +260,11 @@ def parse_headers(sock):
     """
     headers = {}
     while True:
-        line = sock.readline()
+        if hasattr(sock, "avaliable"):
+            line = sock.readline()
+        else:
+            line = _the_interface.readline(sock)
+
         if not line or line == b"\r\n":
             break
 
