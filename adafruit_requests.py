@@ -69,7 +69,8 @@ def set_socket(sock, iface=None):
     if iface:
         global _the_interface # pylint: disable=invalid-name, global-statement
         _the_interface = iface
-        _the_sock.set_interface(iface)
+        if hasattr(_the_interface, "ssid"):
+            _the_sock.set_interface(iface)
 
 class Response:
     """The response from a request, contains all the headers/content"""
@@ -177,21 +178,30 @@ def request(method, url, data=None, json=None, headers=None, stream=False, timeo
         host, port = host.split(":", 1)
         port = int(port)
 
-    addr_info = _the_sock.getaddrinfo(host, port, 0, _the_sock.SOCK_STREAM)[0]
+    if hasattr(_the_interface, "ssid"):
+        addr_info = _the_sock.getaddrinfo(host, port, 0, _the_sock.SOCK_STREAM)[0]
+    else:
+        addr_info = _the_sock.getaddrinfo(host, port)[0]
+        print(addr_info)
+
     sock = _the_sock.socket(addr_info[0], addr_info[1], addr_info[2])
     resp = Response(sock)  # our response
 
-    sock.settimeout(timeout)  # socket read timeout
+    #sock.settimeout(timeout)  # socket read timeout
 
     try:
         if proto == "https:":
-            conntype = _the_interface.TLS_MODE
+            if hasattr(_the_interface, "ssid"):
+                conntype = _the_interface.TLS_MODE
             sock.connect(
                 (host, port), conntype
             )  # for SSL we need to know the host name
         else:
-            conntype = _the_interface.TCP_MODE
-            sock.connect(addr_info[-1], conntype)
+            if hasattr(_the_interface, "ssid"):
+                conntype = _the_interface.TCP_MODE
+                sock.connect(addr_info[-1], conntype)
+            else:
+                sock.connect(addr_info[-1])
         sock.send(b"%s /%s HTTP/1.0\r\n" % (method, path))
         if "Host" not in headers:
             sock.send(b"Host: %s\r\n" % host)
@@ -217,8 +227,17 @@ def request(method, url, data=None, json=None, headers=None, stream=False, timeo
         if data:
             sock.send(bytes(data, "utf-8"))
 
-        line = sock.readline()
-        # print(line)
+        if hasattr(sock, "available"):
+            line = sock.readline()
+        else:
+            #line = bytes()
+            line = bytes()
+            while True:
+                data = sock.recv(1024)
+                line +=data
+                if not data: break
+
+        print("Read: ", line)
         line = line.split(None, 2)
         status = int(line[1])
         reason = ""
